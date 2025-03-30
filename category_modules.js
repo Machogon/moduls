@@ -374,35 +374,42 @@ const categoryModules = {
 // ======================================================================
 "Автолампи": createCategoryModule(
     "Автолампи",
-    {}, // Пустой объект (параметры будут из JSON)
+    {},
     {
         customHandler: async function() {
-            // 1. Находим артикул на странице
             const article = document.querySelector('input[name="article"]').value;
             if (!article) return null;
 
-            // 2. Загружаем JSON (замените ссылку на свою!)
-            const jsonUrl = 'https://raw.githubusercontent.com/ваш_аккаунт/ваш_репозиторий/main/autolamps.json';
-            const jsonData = await loadJsonFromGitHub(jsonUrl);
+            const jsonData = await loadJsonFromGitHub('https://.../autolamps.json');
             if (!jsonData) return null;
 
-            // 3. Ищем артикул в JSON
             const lampData = jsonData.find(item => 
                 item.article === article || 
                 item["Каталожний номер"] === article
             );
             if (!lampData) return null;
 
-            // 4. Возвращаем параметры для Rozetka
+            // Словарь для "перевода" технологий
+            const technologyMap = {
+                "розжарювання": "Лампы накаливания",
+                "галогенові": "Галогенные лампы",
+                "світлодіодні": "Светодиодные лампы",
+                "ксенонові": "Ксеноновые лампы"
+                // Добавьте другие соответствия по необходимости
+            };
+
+            // Преобразуем "Технологію" в нужный формат
+            const technology = technologyMap[lampData["Технологія"].toLowerCase()] || lampData["Технологія"];
+
             return {
-                "27126": lampData["Призначення"] || "", // Назначение
-                "27127": lampData["Тип лампи"] || "",   // Тип лампы
-                "27128": lampData["Цоколь"] || "",      // Цоколь
-                "27125": lampData["Технологія"] || "",  // Вид
-                "92802": "1"                            // Количество
+                "27126": lampData["Призначення"] || "",
+                "27127": lampData["Тип лампи"] || "",
+                "27128": lampData["Цоколь"] || "",
+                "27125": technology, // Используем преобразованное значение
+                "92802": "1"
             };
         },
-        stopWords: ["светодиод", "лента"] // Слова-исключения
+        stopWords: ["светодиод", "лента"]
     }
 ),
   
