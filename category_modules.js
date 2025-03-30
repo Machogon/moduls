@@ -7,33 +7,6 @@
  * @param {string[]} [options.stopWords] - Слова, запрещающие добавление параметров
  * @param {boolean} [options.skipSideIfNotFound] - Пропускать "Сторону установки" если не найдена
  */
-// ================== Функция загрузки JSON ================== //
-window.categoryModules = window.categoryModules || {};
-
-// Функция загрузки JSON
-window.loadJsonFromGitHub = async (url) => {
-  try {
-    console.log("🔄 Загружаем JSON...");
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Ошибка HTTP: ${response.status}`);
-    return await response.json();
-  } catch (error) {
-    console.error("🚨 Ошибка загрузки JSON:", error);
-    return null;
-  }
-};
-
-// Преобразователь для "Технологии"
-window.convertTech = (tech) => {
-  const map = {
-    "розжарювання": "Лампы накаливания",
-    "галогенові": "Галогенные лампы", 
-    "світлодіодні": "Светодиодные лампы",
-    "ксенонові": "Ксеноновые лампы"
-  };
-  return tech ? map[tech.toLowerCase()] || tech : "";
-};
-
 const createCategoryModule = (categoryName, parameters, { stopWords = [], skipSideIfNotFound = false } = {}) => ({
     parameters,
     stopWords,
@@ -385,63 +358,11 @@ const categoryModules = {
     }
 )
 
-// ======================================================================
-// ========================= 12. Автолампи ==============================
-// ======================================================================
-"Автолампи": {
-  process: async function() {
-    try {
-      // 1. Получаем артикул
-      const articleInput = document.querySelector('input[name="article"]');
-      if (!articleInput) throw new Error("❌ Не найден input для артикула");
-      
-      const article = articleInput.value.trim();
-      if (!article) throw new Error("❌ Артикул пустой");
 
-      // 2. Загружаем JSON
-      const jsonUrl = "https://raw.githubusercontent.com/Machogon/moduls/main/characteristics.json";
-      const jsonData = await loadJsonFromGitHub(jsonUrl);
-      if (!jsonData) throw new Error("❌ Не удалось загрузить JSON");
-
-      // 3. Ищем товар в JSON
-      const productData = jsonData.find(item => 
-        item.article === article || 
-        item["Каталожний номер"] === article
-      );
-      if (!productData) throw new Error(`❌ Артикул ${article} не найден в JSON`);
-
-      // 4. Формируем параметры
-      const params = {
-        "27126": productData["Призначення"] || "", // Назначение
-        "27127": productData["Тип лампи"] || "",   // Тип лампы
-        "27128": productData["Цоколь"] || "",      // Цоколь
-        "27125": convertTech(productData["Технологія"]), // Вид
-        "92802": "1"                              // Количество
-      };
-
-      // 5. Добавляем параметры
-      for (const [paramId, value] of Object.entries(params)) {
-        if (value) {
-          await new Promise(resolve => {
-            window.addParameter(paramId, value, resolve);
-          });
-        }
-      }
-
-      // 6. Переход к следующему товару
-      window.goToNextProduct();
-
-    } catch (error) {
-      console.error(error.message);
-      window.goToNextProduct();
-    }
-  }
-},
 }; // Конец объекта categoryModules
 
 // ====================== ЭКСПОРТ МОДУЛЕЙ ======================
 /* Отмечаем, что модули готовы */
-window.categoryModules.isInitialized = true;
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = categoryModules; // Для Node.js
