@@ -369,6 +369,43 @@ const categoryModules = {
     }
 )
 
+// ======================================================================
+// ========================= 12. Автолампи ==============================
+// ======================================================================
+"Автолампи": createCategoryModule(
+    "Автолампи",
+    {}, // Пустой объект (параметры будут из JSON)
+    {
+        customHandler: async function() {
+            // 1. Находим артикул на странице
+            const article = document.querySelector('input[name="article"]').value;
+            if (!article) return null;
+
+            // 2. Загружаем JSON (замените ссылку на свою!)
+            const jsonUrl = 'https://raw.githubusercontent.com/ваш_аккаунт/ваш_репозиторий/main/autolamps.json';
+            const jsonData = await loadJsonFromGitHub(jsonUrl);
+            if (!jsonData) return null;
+
+            // 3. Ищем артикул в JSON
+            const lampData = jsonData.find(item => 
+                item.article === article || 
+                item["Каталожний номер"] === article
+            );
+            if (!lampData) return null;
+
+            // 4. Возвращаем параметры для Rozetka
+            return {
+                "27126": lampData["Призначення"] || "", // Назначение
+                "27127": lampData["Тип лампи"] || "",   // Тип лампы
+                "27128": lampData["Цоколь"] || "",      // Цоколь
+                "27125": lampData["Технологія"] || "",  // Вид
+                "92802": "1"                            // Количество
+            };
+        },
+        stopWords: ["светодиод", "лента"] // Слова-исключения
+    }
+),
+  
 }; // Конец объекта categoryModules
 
 // ====================== ЭКСПОРТ МОДУЛЕЙ ======================
