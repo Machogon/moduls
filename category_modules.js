@@ -8,15 +8,31 @@
  * @param {boolean} [options.skipSideIfNotFound] - Пропускать "Сторону установки" если не найдена
  */
 // ================== Функция загрузки JSON ================== //
-async function loadJsonFromGitHub(url) {
+window.categoryModules = window.categoryModules || {};
+
+// Функция загрузки JSON
+window.loadJsonFromGitHub = async (url) => {
   try {
+    console.log("🔄 Загружаем JSON...");
     const response = await fetch(url);
+    if (!response.ok) throw new Error(`Ошибка HTTP: ${response.status}`);
     return await response.json();
   } catch (error) {
-    console.error('Ошибка загрузки JSON:', error);
+    console.error("🚨 Ошибка загрузки JSON:", error);
     return null;
   }
-}
+};
+
+// Преобразователь для "Технологии"
+window.convertTech = (tech) => {
+  const map = {
+    "розжарювання": "Лампы накаливания",
+    "галогенові": "Галогенные лампы", 
+    "світлодіодні": "Светодиодные лампы",
+    "ксенонові": "Ксеноновые лампы"
+  };
+  return tech ? map[tech.toLowerCase()] || tech : "";
+};
 
 const createCategoryModule = (categoryName, parameters, { stopWords = [], skipSideIfNotFound = false } = {}) => ({
     parameters,
@@ -372,98 +388,61 @@ const categoryModules = {
 // ======================================================================
 // ========================= 12. Автолампи ==============================
 // ======================================================================
-"Автолампи": createCategoryModule(
-    "Автолампи",
-    {}, // Пустой объект, так как параметры берутся из JSON
-    {
-        customHandler: async function() {
-            // 1. Получаем артикул товара
-            const articleInput = document.querySelector('input[name="article"]');
-            if (!articleInput) {
-                console.warn('Поле артикула не найдено на странице');
-                return null;
-            }
-            const article = articleInput.value.trim();
-            if (!article) {
-                console.warn('Артикул товара пустой');
-                return null;
-            }
+"Автолампи": {
+  process: async function() {
+    try {
+      // 1. Получаем артикул
+      const articleInput = document.querySelector('input[name="article"]');
+      if (!articleInput) throw new Error("❌ Не найден input для артикула");
+      
+      const article = articleInput.value.trim();
+      if (!article) throw new Error("❌ Артикул пустой");
 
-            // 2. Загружаем JSON с характеристиками
-            const jsonUrl = 'https://raw.githubusercontent.com/Machogon/moduls/refs/heads/main/characteristics.json';
-            let jsonData;
-            try {
-                const response = await fetch(jsonUrl);
-                jsonData = await response.json();
-                if (!Array.isArray(jsonData)) {
-                    throw new Error('Неверный формат JSON данных');
-                }
-            } catch (error) {
-                console.error('Ошибка загрузки JSON:', error);
-                return null;
-            }
+      // 2. Загружаем JSON
+      const jsonUrl = "https://raw.githubusercontent.com/Machogon/moduls/main/characteristics.json";
+      const jsonData = await loadJsonFromGitHub(jsonUrl);
+      if (!jsonData) throw new Error("❌ Не удалось загрузить JSON");
 
-            // 3. Ищем товар в JSON по артикулу
-            const productData = jsonData.find(item => 
-                item.article === article || 
-                item["Каталожний номер"] === article
-            );
-            
-            if (!productData) {
-                console.warn(`Товар с артикулом ${article} не найден в JSON`);
-                return null;
-            }
+      // 3. Ищем товар в JSON
+      const productData = jsonData.find(item => 
+        item.article === article || 
+        item["Каталожний номер"] === article
+      );
+      if (!productData) throw new Error(`❌ Артикул ${article} не найден в JSON`);
 
-            // 4. Сопоставление параметров с ID на сайте
-            const parameterMap = {
-                // ID параметра: поле из JSON
-                27126: "Призначення",  // Назначение
-                27127: "Тип лампи",    // Тип лампы
-                27128: "Цоколь",       // Цоколь
-                27125: "Технологія",   // Вид
-                92802: "Кількість"     // Количество
-            };
+      // 4. Формируем параметры
+      const params = {
+        "27126": productData["Призначення"] || "", // Назначение
+        "27127": productData["Тип лампи"] || "",   // Тип лампы
+        "27128": productData["Цоколь"] || "",      // Цоколь
+        "27125": convertTech(productData["Технологія"]), // Вид
+        "92802": "1"                              // Количество
+      };
 
-            // 5. Словарь для преобразования значений
-            const valueTransformations = {
-                "Технологія": {
-                    "розжарювання": "Лампы накаливания",
-                    "галогенові": "Галогенные лампы",
-                    "світлодіодні": "Светодиодные лампы",
-                    "ксенонові": "Ксеноновые лампы"
-                }
-            };
+      // 5. Добавляем параметры
+      for (const [paramId, value] of Object.entries(params)) {
+        if (value) {
+          await new Promise(resolve => {
+            window.addParameter(paramId, value, resolve);
+          });
+        }
+      }
 
-            // 6. Формируем параметры для сайта
-            const params = {};
-            for (const [paramId, jsonField] of Object.entries(parameterMap)) {
-                let value = productData[jsonField];
-                
-                // Применяем преобразование значений если нужно
-                if (value && valueTransformations[jsonField]) {
-                    value = valueTransformations[jsonField][value.toLowerCase()] || value;
-                }
-                
-                if (value) {
-                    params[paramId] = value.toString();
-                }
-            }
+      // 6. Переход к следующему товару
+      window.goToNextProduct();
 
-            // 7. Добавляем параметр по умолчанию для количества, если не указан
-            if (!params['92802']) {
-                params['92802'] = '1';
-            }
-
-            console.log('Найдены параметры для артикула', article, ':', params);
-            return params;
-        },
-        stopWords: ["світлодіод", "лента", "патрон"] // Слова-исключения
+    } catch (error) {
+      console.error(error.message);
+      window.goToNextProduct();
     }
-),
-  
+  }
+},
 }; // Конец объекта categoryModules
 
 // ====================== ЭКСПОРТ МОДУЛЕЙ ======================
+/* Отмечаем, что модули готовы */
+window.categoryModules.isInitialized = true;
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = categoryModules; // Для Node.js
 } else {
