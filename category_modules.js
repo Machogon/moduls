@@ -7,6 +7,17 @@
  * @param {string[]} [options.stopWords] - Слова, запрещающие добавление параметров
  * @param {boolean} [options.skipSideIfNotFound] - Пропускать "Сторону установки" если не найдена
  */
+// ================== Функция загрузки JSON ================== //
+async function loadJsonFromGitHub(url) {
+  try {
+    const response = await fetch(url);
+    return await response.json();
+  } catch (error) {
+    console.error('Ошибка загрузки JSON:', error);
+    return null;
+  }
+}
+
 const createCategoryModule = (categoryName, parameters, { stopWords = [], skipSideIfNotFound = false } = {}) => ({
     parameters,
     stopWords,
