@@ -1,17 +1,90 @@
-// ==================================================
-// МОДУЛИ КАТЕГОРИЙ ДЛЯ СКРИПТА AUTOPART
-// Формат: 
-//   Каждая категория между // ====== комментариями
-//   Все функции и параметры внутри категории
-// ==================================================
+// ======================== Файл категорий для Tampermonkey ========================
+/**
+ * Базовый шаблон для создания модуля категории
+ * @param {string} categoryName - Название категории (точно как в системе)
+ * @param {object} parameters - Параметры и их значения
+ * @param {object} [options] - Дополнительные настройки
+ * @param {string[]} [options.stopWords] - Слова, запрещающие добавление параметров
+ * @param {boolean} [options.skipSideIfNotFound] - Пропускать "Сторону установки" если не найдена
+ */
+const createCategoryModule = (categoryName, parameters, { stopWords = [], skipSideIfNotFound = false } = {}) => ({
+    parameters,
+    stopWords,
+    skipSideIfNotFound,
+    determineValues: function(title) {
+        if (!window.isScriptRunning) return null;
+        const result = {};
+        const lowerTitle = title.toLowerCase();
 
+        // Проверка стоп-слов
+        if (this.stopWords.some(word => lowerTitle.includes(word.toLowerCase()))) {
+            console.log(`⛔ Стоп-слово найдено, пропускаем добавление параметров`);
+            return null;
+        }
+
+        // Анализ параметров
+        for (const [paramId, mappings] of Object.entries(this.parameters)) {
+            for (const [value, keywords] of Object.entries(mappings)) {
+                if (keywords.some(kw => lowerTitle.includes(kw.toLowerCase()))) {
+                    result[paramId] = value;
+                    break;
+                }
+            }
+        }
+
+        // Особый случай: добавление обеих сторон если не найдена
+        if (!result["122881"] && !this.skipSideIfNotFound && parameters["122881"]) {
+            result["122881"] = ["Слева", "Справа"];
+            console.log(`ℹ Добавляем обе стороны установки`);
+        }
+
+        return Object.keys(result).length ? result : null;
+    },
+    process: function() {
+        console.log(`🔧 Обработка категории: ${categoryName}`);
+        const productName = document.querySelector("input[name='name']")?.value.toLowerCase() || '';
+        const params = this.determineValues(productName);
+        
+        if (!params) {
+            console.log("⚠ Параметры не найдены в названии");
+            window.goToNextProduct();
+            return;
+        }
+
+        // Последовательное добавление параметров
+        const processParam = (index) => {
+            const paramEntries = Array.isArray(params) ? 
+                params.map(value => [Object.keys(this.parameters)[0], value]) : 
+                Object.entries(params);
+            
+            if (index >= paramEntries.length) {
+                window.goToNextProduct();
+                return;
+            }
+
+            const [paramId, value] = paramEntries[index];
+            if (!window.checkIfParameterExists(paramId, value)) {
+                window.addParameter(paramId, value, () => processParam(index + 1));
+            } else {
+                console.log(`✅ Параметр уже есть: ${paramId} = "${value}"`);
+                processParam(index + 1);
+            }
+        };
+
+        processParam(0);
+    }
+});
+
+// ======================== ВСЕ КАТЕГОРИИ С ПОЛНЫМИ ПАРАМЕТРАМИ ========================
 const categoryModules = {
 
-// ==================================================
-// КАТЕГОРИЯ: Комплектуючі стартерів та генераторів
-// ==================================================
-"Комплектуючі стартерів та генераторів": {
-    parameters: {
+// ======================================================================================
+// ====================== 1. Комплектуючі стартерів та генераторів ======================
+// ======================================================================================
+"Комплектуючі стартерів та генераторів": createCategoryModule(
+    "Комплектуючі стартерів та генераторів",
+    {
+        /* Параметр "Вид компонента" (ID: 251185) */
         "251185": {
             "Шкив генератора": ["шкив генератора", "шкиф генератора", "шкив гениратора", "муфта", "шків ременя генератора"],
             "Ротор генератора": ["ротор генератора", "ротар генератора"],
@@ -37,72 +110,26 @@ const categoryModules = {
             "Диодные мосты": ["диодный мост", "диод мост", "випрямляч діодний"],
             "Вилка стартера": ["вилка стартера", "важіль стартера"]
         }
-    },
-    
-    determineValues: function(title) {
-        if (!window.isScriptRunning) return null;
-        const result = {};
-        for (const [paramId, mappings] of Object.entries(this.parameters)) {
-            for (const [value, keywords] of Object.entries(mappings)) {
-                for (const keyword of keywords) {
-                    if (title.includes(keyword)) {
-                        console.log(`🔍 Обнаружено: "${value}" для параметра ${paramId} в "${title}" (ключ: "${keyword}")`);
-                        result[paramId] = value;
-                        break;
-                    }
-                }
-                if (result[paramId]) break;
-            }
-        }
-        return Object.keys(result).length > 0 ? result : null;
-    },
-    
-    process: function() {
-        console.log("🔧 Обработка категории 'Комплектуючі стартерів та генераторів'");
-        const productName = document.querySelector("input[name='name']").value.toLowerCase();
-        const params = this.determineValues(productName);
-        if (!params) {
-            console.log("⚠ Параметры для добавления не найдены в названии.");
-            window.goToNextProduct();
-            return;
-        }
-
-        const paramIds = Object.keys(params);
-        let index = 0;
-
-        function addNext() {
-            if (index >= paramIds.length) {
-                window.goToNextProduct();
-                return;
-            }
-            const paramId = paramIds[index];
-            if (!window.checkIfParameterExists(paramId, params[paramId])) {
-                window.addParameter(paramId, params[paramId], () => {
-                    index++;
-                    addNext();
-                });
-            } else {
-                index++;
-                addNext();
-            }
-        }
-        addNext();
     }
-},
+),
 
-// ==================================================
-// КАТЕГОРИЯ: Сайлентблоки подвески
-// ==================================================
-"Сайлентблоки подвески": {
-    parameters: {
+// ======================================================================
+// ====================== 2. Сайлентблоки подвески ======================
+// ======================================================================
+"Сайлентблоки подвески": createCategoryModule(
+    "Сайлентблоки подвески",
+    {
+        /* Параметр "Ось" (ID: 122846) */
         "122846": {
             "Передняя": ["передняя", "передні", "front"],
             "Задняя": ["задняя", "задні", "rear"]
         },
+        /* Параметр "Сторона установки" (ID: 122881) */
         "122881": {
             "Слева": ["слева", "ліворуч", "left"],
             "Справа": ["справа", "праворуч", "right"]
         },
+        /* Параметр "Место размещения" (ID: 173460) */
         "173460": {
             "Рессоры": ["рессоры", "рессора"],
             "Рычаги": ["рычаги", "рычаг"],
@@ -112,75 +139,30 @@ const categoryModules = {
             "Рулевые рейки": ["рулевые рейки", "рулевая рейка"],
             "Балки": ["балки", "балка"]
         },
+        /* Параметр "Материал" (ID: 173478) */
         "173478": {
             "Полиуретан": ["полиуретан", "поліуретан"]
         }
-    },
-    
-    determineValues: function(title) {
-        if (!window.isScriptRunning) return null;
-        const result = {};
-        for (const [paramId, mappings] of Object.entries(this.parameters)) {
-            for (const [value, keywords] of Object.entries(mappings)) {
-                for (const keyword of keywords) {
-                    if (title.includes(keyword)) {
-                        console.log(`🔍 Обнаружено: "${value}" для параметра ${paramId} в "${title}" (ключ: "${keyword}")`);
-                        result[paramId] = value;
-                        break;
-                    }
-                }
-                if (result[paramId]) break;
-            }
-        }
-        return Object.keys(result).length > 0 ? result : null;
-    },
-    
-    process: function() {
-        console.log("🔧 Обработка категории 'Сайлентблоки подвески'");
-        const productName = document.querySelector("input[name='name']").value.toLowerCase();
-        const params = this.determineValues(productName);
-        if (!params) {
-            console.log("⚠ Параметры для добавления не найдены в названии.");
-            window.goToNextProduct();
-            return;
-        }
-
-        const paramIds = Object.keys(params);
-        let index = 0;
-
-        function addNext() {
-            if (index >= paramIds.length) {
-                window.goToNextProduct();
-                return;
-            }
-            const paramId = paramIds[index];
-            if (!window.checkIfParameterExists(paramId, params[paramId])) {
-                window.addParameter(paramId, params[paramId], () => {
-                    index++;
-                    addNext();
-                });
-            } else {
-                index++;
-                addNext();
-            }
-        }
-        addNext();
     }
-},
+),
 
-// ==================================================
-// КАТЕГОРИЯ: Тормозные шланги и трубки
-// ==================================================
-"Тормозные шланги и трубки": {
-    parameters: {
+// ==========================================================================
+// ====================== 3. Тормозные шланги и трубки ======================
+// ==========================================================================
+"Тормозные шланги и трубки": createCategoryModule(
+    "Тормозные шланги и трубки",
+    {
+        /* Параметр "Ось" (ID: 122846) */
         "122846": {
             "Передняя": ["передняя", "передні", "front", "перед"],
             "Задняя": ["задняя", "задні", "rear", "зад"]
         },
+        /* Параметр "Сторона установки" (ID: 122881) */
         "122881": {
             "Слева": ["слева", "ліворуч", "left", "лев", "лів"],
             "Справа": ["справа", "праворуч", "right", "прав"]
         },
+        /* Параметр "Тип детали" (ID: 250591) */
         "250591": {
             "Барабан тормозной": ["барабан тормозной", "барабан"],
             "Ремкомплект суппортов": ["ремкомплект суппортов", "ремкомплект суппорта"],
@@ -193,97 +175,17 @@ const categoryModules = {
             "Трубки тормозные": ["трубки тормозные", "трубка тормозная", "трубка", "трубка гальмівна", "трубка системи гальм", "тормозная трубка"]
         }
     },
-    
-    skipSideIfNotFound: true,
-    
-    determineValues: function(title) {
-        if (!window.isScriptRunning) return null;
-        const result = {};
-        for (const [paramId, mappings] of Object.entries(this.parameters)) {
-            for (const [value, keywords] of Object.entries(mappings)) {
-                for (const keyword of keywords) {
-                    if (title.includes(keyword)) {
-                        console.log(`🔍 Обнаружено: "${value}" для параметра ${paramId} в "${title}" (ключ: "${keyword}")`);
-                        result[paramId] = value;
-                        break;
-                    }
-                }
-                if (result[paramId]) break;
-            }
-        }
-        
-        if (!result["122881"] && !this.skipSideIfNotFound) {
-            result["122881"] = ["Слева", "Справа"];
-            console.log(`ℹ "Сторона установки" не найдена, добавляем обе стороны: "Слева" и "Справа".`);
-        }
-        
-        return Object.keys(result).length > 0 ? result : null;
-    },
-    
-    process: function() {
-        console.log("🔧 Обработка категории 'Тормозные шланги и трубки'");
-        const productName = document.querySelector("input[name='name']").value.toLowerCase();
-        const params = this.determineValues(productName);
-        if (!params) {
-            console.log("⚠ Параметры для добавления не найдены в названии.");
-            window.goToNextProduct();
-            return;
-        }
+    { skipSideIfNotFound: true }
+),
 
-        const paramIds = Object.keys(params);
-        let index = 0;
-
-        function addNext() {
-            if (index >= paramIds.length) {
-                window.goToNextProduct();
-                return;
-            }
-            const paramId = paramIds[index];
-            const value = params[paramId];
-            
-            if (Array.isArray(value)) {
-                let valueIndex = 0;
-                function addValue() {
-                    if (valueIndex >= value.length) {
-                        index++;
-                        addNext();
-                        return;
-                    }
-                    if (!window.checkIfParameterExists(paramId, value[valueIndex])) {
-                        window.addParameter(paramId, value[valueIndex], () => {
-                            valueIndex++;
-                            addValue();
-                        });
-                    } else {
-                        valueIndex++;
-                        addValue();
-                    }
-                }
-                addValue();
-            } else {
-                if (!window.checkIfParameterExists(paramId, value)) {
-                    window.addParameter(paramId, value, () => {
-                        index++;
-                        addNext();
-                    });
-                } else {
-                    index++;
-                    addNext();
-                }
-            }
-        }
-        addNext();
-    }
-}
-
-};
-
-// ============================================================================
-// Категория: Датчики автомобильные
-// ============================================================================
-const carSensorsModule = {
-    parameters: {
-        "251173": { // "Вид" — тип датчика
+// =====================================================================
+// ====================== 4. Датчики автомобільні ======================
+// =====================================================================
+"Датчики автомобільні": createCategoryModule(
+    "Датчики автомобільні",
+    {
+        /* Параметр "Вид датчика" (ID: 251173) */
+        "251173": {
             "Датчики давления в шинах": ["датчик давления в шинах", "датчик тиску шин"],
             "Вольтметры": ["вольтметр", "вольтметры"],
             "Датчики температуры": ["датчик температуры", "датчик температури", "внешняя температура", "температура"],
@@ -316,380 +218,81 @@ const carSensorsModule = {
             "Датчики уровня кузова": ["датчик уровня кузова", "датчик рівня кузова"],
             "Датчики давления топлива": ["датчик давления топлива", "датчик тиску палива"]
         }
-    },
-    determineValues: function(title) {
-        if (!isScriptRunning) return null;
-        const result = {};
-        for (const [paramId, mappings] of Object.entries(this.parameters)) {
-            for (const [value, keywords] of Object.entries(mappings)) {
-                for (const keyword of keywords) {
-                    if (title.includes(keyword)) {
-                        console.log(`🔍 Обнаружено: "${value}" для параметра ${paramId} в "${title}" (ключ: "${keyword}")`);
-                        result[paramId] = value;
-                        break;
-                    }
-                }
-                if (result[paramId]) break;
-            }
-        }
-        return Object.keys(result).length > 0 ? result : null;
-    },
-    process: function() {
-        console.log("🔧 Обработка категории 'Датчики автомобильные'");
-        const productName = document.querySelector("input[name='name']").value.toLowerCase();
-        const params = this.determineValues(productName);
-        if (!params) {
-            console.log("⚠ Параметры для добавления не найдены в названии.");
-            goToNextProduct();
-            return;
-        }
-        const paramIds = Object.keys(params);
-        let index = 0;
-        function addNext() {
-            if (index >= paramIds.length) {
-                goToNextProduct();
-                return;
-            }
-            const paramId = paramIds[index];
-            if (!checkIfParameterExists(paramId, params[paramId])) {
-                addParameter(paramId, params[paramId], () => {
-                    index++;
-                    addNext();
-                });
-            } else {
-                index++;
-                addNext();
-            }
-        }
-        addNext();
     }
-};
+),
 
-// ============================================================================
-// Категория: Тросы сцепления и КПП, приводы КПП, кулисы
-// ============================================================================
-const clutchAndGearCablesModule = {
-    parameters: {
-        "251482": { // "Тип" — вид троса или механизма КПП
+// ======================================================================
+// ====================== 5. Тросы сцепления и КПП ======================
+// ======================================================================
+"Тросы сцепления и КПП, приводы КПП, кулисы": createCategoryModule(
+    "Тросы сцепления и КПП, приводы КПП, кулисы",
+    {
+        /* Параметр "Тип компонента" (ID: 251482) */
+        "251482": {
             "Тросы сцепления": ["трос сцепления", "трос зчеплення", "тросик сцепления", "трос сцепл"],
             "Тросы переключения передач": ["трос переключения передач", "трос перемикання передач", "трос КПП", "трос коробки передач", "трос важеля КПП"],
             "Тяги переключения передач": ["тяга переключения передач", "тяга перемикання передач", "тяга КПП"],
             "Кулисы в сборе": ["кулиса в сборе", "куліса в зборі", "кулиса КПП", "куліса коробки передач"]
         }
-    },
-    determineValues: function(title) {
-        if (!isScriptRunning) return null;
-        const result = {};
-        for (const [paramId, mappings] of Object.entries(this.parameters)) {
-            for (const [value, keywords] of Object.entries(mappings)) {
-                for (const keyword of keywords) {
-                    if (title.includes(keyword)) {
-                        console.log(`🔍 Обнаружено: "${value}" для параметра ${paramId} в "${title}" (ключ: "${keyword}")`);
-                        result[paramId] = value;
-                        break;
-                    }
-                }
-                if (result[paramId]) break;
-            }
-        }
-        return Object.keys(result).length > 0 ? result : null;
-    },
-    process: function() {
-        console.log("🔧 Обработка категории 'Тросы сцепления и КПП, приводы КПП, кулисы'");
-        const productName = document.querySelector("input[name='name']").value.toLowerCase();
-        const params = this.determineValues(productName);
-        if (!params) {
-            console.log("⚠ Параметры для добавления не найдены в названии.");
-            goToNextProduct();
-            return;
-        }
-        const paramIds = Object.keys(params);
-        let index = 0;
-        function addNext() {
-            if (index >= paramIds.length) {
-                goToNextProduct();
-                return;
-            }
-            const paramId = paramIds[index];
-            if (!checkIfParameterExists(paramId, params[paramId])) {
-                addParameter(paramId, params[paramId], () => {
-                    index++;
-                    addNext();
-                });
-            } else {
-                index++;
-                addNext();
-            }
-        }
-        addNext();
     }
-};
+),
 
-// ============================================================================
-// Категория: Зеркала автомобильные
-// ============================================================================
-const carMirrorsModule = {
-    parameters: {
-        "198908": { // "Тип" — всегда "Боковые"
-            "Боковые": [] // Ключевые слова не нужны, так как добавляем всегда
-        },
-        "122881": { // "Сторона установки" — зависит от названия
+// ======================================================================
+// ====================== 6. Зеркала автомобильные ======================
+// ======================================================================    
+"Зеркала автомобильные": createCategoryModule(
+    "Зеркала автомобильные",
+    {
+        /* Параметр "Тип зеркала" (ID: 198908) */
+        "198908": {"Боковые": []},
+        /* Параметр "Сторона установки" (ID: 122881) */
+        "122881": {
             "Слева": ["слева", "ліворуч", "left", "лев", "лів", "ливов"],
             "Справа": ["справа", "праворуч", "right", "пра"]
         }
     },
-    stopWords: ["накладка", "адаптер YouTube", "тримач", "кільце", "перемикач"],
-    determineValues: function(title) {
-        if (!isScriptRunning) return null;
-        const result = {};
-        const lowerTitle = title.toLowerCase();
-        const hasStopWord = this.stopWords.some(stopWord => {
-            const lowerStopWord = stopWord.toLowerCase();
-            const words = lowerTitle.split(/\s+/);
-            return words.includes(lowerStopWord);
-        });
-        if (!hasStopWord) {
-            result["198908"] = "Боковые";
-            console.log(`🔍 Установлено: "Боковые" для параметра 198908 в "${title}".`);
-        } else {
-            console.log(`⚠ Найдено стоп-слово в "${title}", параметр "Тип" (198908) пропущен.`);
-        }
-        const sideMappings = this.parameters["122881"];
-        for (const [value, keywords] of Object.entries(sideMappings)) {
-            for (const keyword of keywords) {
-                if (lowerTitle.includes(keyword)) {
-                    console.log(`🔍 Обнаружено: "${value}" для параметра 122881 в "${title}" (ключ: "${keyword}")`);
-                    result["122881"] = value;
-                    break;
-                }
-            }
-            if (result["122881"]) break;
-        }
-        return Object.keys(result).length > 0 ? result : null;
-    },
-    process: function() {
-        console.log("🔧 Обработка категории 'Зеркала автомобильные'");
-        const productName = document.querySelector("input[name='name']").value.toLowerCase();
-        const params = this.determineValues(productName);
-        if (!params) {
-            console.log("⚠ Параметры для добавления не найдены в названии.");
-            goToNextProduct();
-            return;
-        }
-        const orderedParamIds = [];
-        if (params["198908"]) orderedParamIds.push("198908");
-        if (params["122881"]) orderedParamIds.push("122881");
-        let index = 0;
-        function addNext() {
-            if (index >= orderedParamIds.length) {
-                goToNextProduct();
-                return;
-            }
-            const paramId = orderedParamIds[index];
-            if (!checkIfParameterExists(paramId, params[paramId])) {
-                addParameter(paramId, params[paramId], () => {
-                    index++;
-                    addNext();
-                });
-            } else {
-                index++;
-                addNext();
-            }
-        }
-        addNext();
+    {
+        stopWords: ["накладка", "адаптер", "тримач", "кільце", "перемикач"]
     }
-};
+),
 
-// ============================================================================
-// Категория: Компрессоры кондиционера автомобильные
-// ============================================================================
-const acCompressorsModule = {
-    parameters: {
-        "173742": { // "Тип"
+// =========================================================================
+// ====================== 7. Компрессоры кондиционера ======================
+// =========================================================================
+"Компрессоры кондиционера автомобильные": createCategoryModule(
+    "Компрессоры кондиционера автомобильные",
+    {
+        /* Параметр "Тип компрессора" (ID: 173742) */
+        "173742": {
             "Компрессоры в сборе": ["компрессор в сборе", "компресор у зборі", "компрессор", "компресор"],
             "Клапаны компрессора": ["клапан компрессора", "клапан компресора", "клапан", "клапани"]
         }
-    },
-    determineValues: function(title) {
-        if (!isScriptRunning) return null;
-        const result = {};
-        const lowerTitle = title.toLowerCase();
-        const typeMappings = this.parameters["173742"];
-        for (const [value, keywords] of Object.entries(typeMappings)) {
-            for (const keyword of keywords) {
-                if (lowerTitle.includes(keyword)) {
-                    console.log(`🔍 Обнаружено: "${value}" для параметра 173742 в "${title}" (ключ: "${keyword}")`);
-                    result["173742"] = value;
-                    break;
-                }
-            }
-            if (result["173742"]) break;
-        }
-        return Object.keys(result).length > 0 ? result : null;
-    },
-    process: function() {
-        console.log("🔧 Обработка категории 'Компрессоры кондиционера автомобильные'");
-        const productName = document.querySelector("input[name='name']").value.toLowerCase();
-        const params = this.determineValues(productName);
-        if (!params) {
-            console.log("⚠ Параметры для добавления не найдены в названии.");
-            goToNextProduct();
-            return;
-        }
-        const orderedParamIds = [];
-        if (params["173742"]) orderedParamIds.push("173742");
-        let index = 0;
-        function addNext() {
-            if (index >= orderedParamIds.length) {
-                goToNextProduct();
-                return;
-            }
-            const paramId = orderedParamIds[index];
-            if (!checkIfParameterExists(paramId, params[paramId])) {
-                addParameter(paramId, params[paramId], () => {
-                    index++;
-                    addNext();
-                });
-            } else {
-                index++;
-                addNext();
-            }
-        }
-        addNext();
     }
-};
+),
 
-// ============================================================================
-// Категория: Муфты компрессора кондиционера
-// ============================================================================
-const acCompressorClutchesModule = {
-    parameters: {
-        "173742": { // "Тип"
+// ==================================================================
+// ====================== 8. Муфты компрессора ======================
+// ==================================================================
+"Муфты компрессора кондиционера": createCategoryModule(
+    "Муфты компрессора кондиционера",
+    {
+        /* Параметр "Тип муфты" (ID: 173742) */
+        "173742": {
             "Диски сцепления муфты компрессора": ["диск сцепления муфты", "диск зчеплення муфти", "диск муфти"],
             "Муфты компрессора": ["муфта компрессора", "муфта компресора", "муфта", "электромагнитное"],
             "Подшипники муфты компрессора": ["подшипник муфты", "підшипник муфти", "подшипник"]
         }
-    },
-    determineValues: function(title) {
-        if (!isScriptRunning) return null;
-        const result = {};
-        const lowerTitle = title.toLowerCase();
-        const typeMappings = this.parameters["173742"];
-        for (const [value, keywords] of Object.entries(typeMappings)) {
-            for (const keyword of keywords) {
-                if (lowerTitle.includes(keyword)) {
-                    console.log(`🔍 Обнаружено: "${value}" для параметра 173742 в "${title}" (ключ: "${keyword}")`);
-                    result["173742"] = value;
-                    break;
-                }
-            }
-            if (result["173742"]) break;
-        }
-        return Object.keys(result).length > 0 ? result : null;
-    },
-    process: function() {
-        console.log("🔧 Обработка категории 'Муфты компрессора кондиционера'");
-        const productName = document.querySelector("input[name='name']").value.toLowerCase();
-        const params = this.determineValues(productName);
-        if (!params) {
-            console.log("⚠ Параметры для добавления не найдены в названии.");
-            goToNextProduct();
-            return;
-        }
-        const orderedParamIds = [];
-        if (params["173742"]) orderedParamIds.push("173742");
-        let index = 0;
-        function addNext() {
-            if (index >= orderedParamIds.length) {
-                goToNextProduct();
-                return;
-            }
-            const paramId = orderedParamIds[index];
-            if (!checkIfParameterExists(paramId, params[paramId])) {
-                addParameter(paramId, params[paramId], () => {
-                    index++;
-                    addNext();
-                });
-            } else {
-                index++;
-                addNext();
-            }
-        }
-        addNext();
     }
-};
+),
 
-// ============================================================================
-// Категория: Рейки топливные, топливопроводы и их части
-// ============================================================================
-const fuelRailsAndLinesModule = {
-    parameters: {
+// ===================================================================
+// ====================== 9. Топливные форсунки ======================
+// ===================================================================
+"Топливные форсунки": createCategoryModule(
+    "Топливные форсунки",
+    {
+        /* Параметр "Тип компонента" (ID: 173742) */
         "173742": {
-            "Обратные клапаны": ["обратный клапан", "зворотний клапан", "обратн клапан", "клапан топливный обратный", "клапан паливний зворотний"],
-            "Рейки топливные": ["рейка топливная", "паливна рейка", "топливная рейка", "рампа топливная", "паливна рампа", "магістраль паливна", "топливная рампа"],
-            "Соединители топливных шлангов": ["соединитель топливного шланга", "з’єднувач паливного шланга", "соединитель шланга", "штуцер паливної магiстралi", "муфта", "муфта швидкодіюча"],
-            "Топливные трубки": ["топливная трубка", "паливна трубка", "топливн трубка", "трубка", "трубка подачи", "трубка обратки", "трубопровод", "топливопровод", "трубка паливна", "трубка топливная к форсунке", "трубка топливная (паук)", "трубопровод высокого давления", "трубопровод низкого давления"],
-            "Шланги обратки": ["шланг обратки", "шланг зворотки", "обратный шланг", "шланг паливний", "шланг паливний гумовий", "шланг топливный", "шланг топливный (обратка)", "шланг, утечка топлива"],
-            "Регуляторы давления топлива": ["регулятор давления топлива", "регулятор тиску палива", "регулятор давления", "клапан тиску", "клапан ограничения давления"],
-            "Редукционные клапаны": ["редукционный клапан", "редукційний клапан", "редукц клапан", "клапан паливної магістралі"],
-            "Тросы акселератора": ["трос акселератора", "трос акселератору", "трос газа"]
-        }
-    },
-    determineValues: function(title) {
-        if (!isScriptRunning) return null;
-        const result = {};
-        const lowerTitle = title.toLowerCase();
-        const typeMappings = this.parameters["173742"];
-        for (const [value, keywords] of Object.entries(typeMappings)) {
-            for (const keyword of keywords) {
-                if (lowerTitle.includes(keyword)) {
-                    console.log(`🔍 Обнаружено: "${value}" для параметра 173742 в "${title}" (ключ: "${keyword}")`);
-                    result["173742"] = value;
-                    break;
-                }
-            }
-            if (result["173742"]) break;
-        }
-        return Object.keys(result).length > 0 ? result : null;
-    },
-    process: function() {
-        console.log("🔧 Обработка категории 'Рейки топливные, топливопроводы и их части'");
-        const productName = document.querySelector("input[name='name']").value.toLowerCase();
-        const params = this.determineValues(productName);
-        if (!params) {
-            console.log("⚠ Параметры для добавления не найдены в названии.");
-            goToNextProduct();
-            return;
-        }
-        const orderedParamIds = [];
-        if (params["173742"]) orderedParamIds.push("173742");
-        let index = 0;
-        function addNext() {
-            if (index >= orderedParamIds.length) {
-                goToNextProduct();
-                return;
-            }
-            const paramId = orderedParamIds[index];
-            if (!checkIfParameterExists(paramId, params[paramId])) {
-                addParameter(paramId, params[paramId], () => {
-                    index++;
-                    addNext();
-                });
-            } else {
-                index++;
-                addNext();
-            }
-        }
-        addNext();
-    }
-};
-
-// ============================================================================
-// Категория: Топливные форсунки
-// ============================================================================
-const fuelInjectorsModule = {
-    parameters: {
-        "173742": { // "Тип"
             "Втулки": ["втулка", "втулки"],
             "Крепежные элементы": ["крепежный элемент", "кріпильний елемент", "крепеж", "кріплення"],
             "Распылители форсунок": ["распылитель форсунки", "розпилювач форсунки", "распылитель", "розпилювач"],
@@ -697,119 +300,69 @@ const fuelInjectorsModule = {
             "Уплотнительные кольца": ["уплотнительное кольцо", "ущільнювальне кільце", "уплотнитель", "ущільнювач"],
             "Форсунки": ["форсунка", "форсунки"]
         }
-    },
-    determineValues: function(title) {
-        if (!isScriptRunning) return null;
-        const result = {};
-        const lowerTitle = title.toLowerCase();
-        const typeMappings = this.parameters["173742"];
-        for (const [value, keywords] of Object.entries(typeMappings)) {
-            for (const keyword of keywords) {
-                if (lowerTitle.includes(keyword)) {
-                    console.log(`🔍 Обнаружено: "${value}" для параметра 173742 в "${title}" (ключ: "${keyword}")`);
-                    result["173742"] = value;
-                    break;
-                }
-            }
-            if (result["173742"]) break;
-        }
-        return Object.keys(result).length > 0 ? result : null;
-    },
-    process: function() {
-        console.log("🔧 Обработка категории 'Топливные форсунки'");
-        const productName = document.querySelector("input[name='name']").value.toLowerCase();
-        const params = this.determineValues(productName);
-        if (!params) {
-            console.log("⚠ Параметры для добавления не найдены в названии.");
-            goToNextProduct();
-            return;
-        }
-        const orderedParamIds = [];
-        if (params["173742"]) orderedParamIds.push("173742");
-        let index = 0;
-        function addNext() {
-            if (index >= orderedParamIds.length) {
-                goToNextProduct();
-                return;
-            }
-            const paramId = orderedParamIds[index];
-            if (!checkIfParameterExists(paramId, params[paramId])) {
-                addParameter(paramId, params[paramId], () => {
-                    index++;
-                    addNext();
-                });
-            } else {
-                index++;
-                addNext();
-            }
-        }
-        addNext();
     }
-};
+),
 
-// ============================================================================
-// Категория: Подшипники подвесные и подшипники трансмиссии
-// ============================================================================
-const suspensionAndTransmissionBearingsModule = {
-    parameters: {
-        "251485": { // "Тип"
+// ========================================================================
+// ====================== 10. Подшипники трансмиссии ======================
+// ========================================================================
+"Подшипники подвесные и подшипники трансмиссии": createCategoryModule(
+    "Подшипники подвесные и подшипники трансмиссии",
+    {
+        /* Параметр "Тип подшипника" (ID: 251485) */
+        "251485": {
             "Подшипники КПП": ["подшипник кпп", "подшипник первичного вала кпп", "подшипник коробки", "пiдшипник кпп"],
-            "Подшипники подвесные": ["опора карданного вала", "подшипник подвісний", "підшипник підвісний", "центрирующая втулка, продольный вал", "подвеска, карданный вал", "подшипник промежуточный подшипник карданного вала", "подшипник подвесной", "подшипник шариковый", "підшипник кульковий", "подшипник игольчатый", "підшипник голчастий", "подшипник роликовый", "подшипник корпусный", "подшипник миниатюрный", "подшипник самоустанавливающийся", "подшипник радиальный", "крепление с подшипником", "узел подшипниковый фланцевый", "подшипник колеса, комплект", "опорный подшипник приводного вала"]
+            "Подшипники подвесные": [
+                "опора карданного вала",
+                "подшипник подвісний",
+                "підшипник підвісний",
+                "центрирующая втулка, продольный вал",
+                "подвеска, карданный вал",
+                "подшипник промежуточный подшипник карданного вала",
+                "подшипник подвесной",
+                "подшипник шариковый",
+                "підшипник кульковий",
+                "подшипник игольчатый",
+                "підшипник голчастий",
+                "подшипник роликовый",
+                "подшипник корпусный",
+                "подшипник миниатюрный",
+                "подшипник самоустанавливающийся",
+                "подшипник радиальный",
+                "крепление с подшипником",
+                "узел подшипниковый фланцевый",
+                "подшипник колеса, комплект",
+                "опорный подшипник приводного вала"
+            ]
         }
-    },
-    determineValues: function(title) {
-        if (!isScriptRunning) return null;
-        const result = {};
-        const lowerTitle = title.toLowerCase();
-        const typeMappings = this.parameters["251485"];
-        for (const [value, keywords] of Object.entries(typeMappings)) {
-            for (const keyword of keywords) {
-                if (lowerTitle.includes(keyword.toLowerCase())) {
-                    console.log(`🔍 Обнаружено: "${value}" для параметра 251485 в "${title}" (ключ: "${keyword}")`);
-                    result["251485"] = value;
-                    break;
-                }
-            }
-            if (result["251485"]) break;
-        }
-        return Object.keys(result).length > 0 ? result : null;
-    },
-    process: function() {
-        console.log("🔧 Обработка категории 'Подшипники подвесные и подшипники трансмиссии'");
-        const productName = document.querySelector("input[name='name']").value.toLowerCase();
-        const params = this.determineValues(productName);
-        if (!params) {
-            console.log("⚠ Параметры для добавления не найдены в названии.");
-            goToNextProduct();
-            return;
-        }
-        const orderedParamIds = [];
-        if (params["251485"]) orderedParamIds.push("251485");
-        let index = 0;
-        function addNext() {
-            if (index >= orderedParamIds.length) {
-                goToNextProduct();
-                return;
-            }
-            const paramId = initiation[index];
-            if (!checkIfParameterExists(paramId, params[paramId])) {
-                addParameter(paramId, params[paramId], () => {
-                    index++;
-                    addNext();
-                });
-            } else {
-                index++;
-                addNext();
-            }
-        }
-        addNext();
     }
-};
+),
 
+// =================================================================
+// ====================== 11. Рейки топливные ======================
+// =================================================================
+"Рейки топливные, топливопроводы и их части": createCategoryModule(
+    "Рейки топливные, топливопроводы и их части",
+    {
+        /* Параметр "Тип компонента" (ID: 173742) */
+        "173742": {
+            "Обратные клапаны": ["обратный клапан","зворотний клапан","обратн клапан","клапан топливный обратный","клапан паливний зворотний"],
+            "Рейки топливные": ["рейка топливная","паливна рейка","топливная рейка","рампа топливная","паливна рампа","магістраль паливна","топливная рампа"],
+            "Соединители топливных шлангов": ["соединитель топливного шланга","з’єднувач паливного шланга","соединитель шланга","штуцер паливної магiстралi","муфта","муфта швидкодіюча"],
+            "Топливные трубки": ["топливная трубка","паливна трубка","топливн трубка","трубка","трубка подачи","трубка обратки","трубопровод","топливопровод","трубка паливна","трубка топливная к форсунке","трубка топливная (паук)","трубопровод высокого давления","трубопровод низкого давления"],
+            "Шланги обратки": ["шланг обратки","шланг зворотки","обратный шланг","шланг паливний","шланг паливний гумовий","шланг топливный","шланг топливный (обратка)","шланг, утечка топлива"],
+            "Регуляторы давления топлива": ["регулятор давления топлива","регулятор тиску палива","регулятор давления","клапан тиску","клапан ограничения давления"],
+            "Редукционные клапаны": ["редукционный клапан","редукційний клапан","редукц клапан","клапан паливної магістралі"],
+            "Тросы акселератора": ["трос акселератора","трос акселератору","трос газа"]
+        }
+    }
+)
 
-// Экспорт модулей
+}; // Конец объекта categoryModules
+
+// ====================== ЭКСПОРТ МОДУЛЕЙ ======================
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = categoryModules;
+    module.exports = categoryModules; // Для Node.js
 } else {
-    window.categoryModules = categoryModules;
+    window.categoryModules = categoryModules; // Для браузера
 }
