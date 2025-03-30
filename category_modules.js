@@ -279,6 +279,67 @@ const categoryModules = {
 // Остальные категории добавляются аналогично...
 };
 
+
+ "Противотуманные фары": {
+        parameters: {
+            "122881": { // Сторона
+                "Левые": ["левые", "лев"],
+                "Правые": ["правые", "прав"]
+            }
+        },
+        determineValues: function(title) {
+            const result = {};
+            const lowerTitle = title.toLowerCase();
+            
+            // Анализ названия
+            for (const [paramId, mappings] of Object.entries(this.parameters)) {
+                for (const [value, keywords] of Object.entries(mappings)) {
+                    if (keywords.some(kw => lowerTitle.includes(kw))) {
+                        result[paramId] = value;
+                        break;
+                    }
+                }
+            }
+            
+            return Object.keys(result).length ? result : null;
+        },
+        process: function() {
+            console.log("🔧 Обработка 'Противотуманные фары'");
+            const productName = document.querySelector("input[name='name']").value.toLowerCase();
+            const params = this.determineValues(productName);
+            
+            if (!params) {
+                console.log("⚠ Не найдены параметры в названии");
+                window.goToNextProduct();
+                return;
+            }
+            
+            // Добавление параметров
+            const paramIds = Object.keys(params);
+            let index = 0;
+            
+            const addNext = () => {
+                if (index >= paramIds.length) {
+                    window.goToNextProduct();
+                    return;
+                }
+                const paramId = paramIds[index];
+                if (!window.checkIfParameterExists(paramId, params[paramId])) {
+                    window.addParameter(paramId, params[paramId], () => {
+                        index++;
+                        addNext();
+                    });
+                } else {
+                    index++;
+                    addNext();
+                }
+            };
+            addNext();
+        }
+    }
+};
+
+
 // Экспорт модулей
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = categoryModules;
