@@ -372,49 +372,46 @@ const categoryModules = {
         "92802": {}  // Количество
     },
     {
-        // Переопределяем determineValues для работы с JSON
         determineValues: function() {
             if (!window.isScriptRunning) return null;
 
-            // Извлекаем артикул
             return new Promise((resolve) => {
                 window.waitForElement('input[name="article"]', (input) => {
                     const article = input.value.trim();
+                    console.log(`🔍 Извлечён артикул: "${article}"`);
                     if (!article) {
                         console.log("⚠ Артикул не найден");
                         resolve(null);
                         return;
                     }
 
-                    // Загружаем JSON
                     const jsonUrl = "https://raw.githubusercontent.com/Machogon/moduls/refs/heads/main/characteristics.json";
                     window.fetchJsonData(jsonUrl).then(data => {
                         if (!data) {
+                            console.log("⚠ JSON не загружен");
                             resolve(null);
                             return;
                         }
 
-                        // Ищем артикул в JSON
                         const lampData = data.find(item => item.article === article);
                         if (!lampData) {
                             console.log(`⚠ Артикул "${article}" не найден в JSON`);
                             resolve(null);
                             return;
                         }
+                        console.log("📋 Найдены данные в JSON:", lampData);
 
-                        // Карта сопоставления
                         const paramMap = {
                             "27126": "Призначення",
                             "27127": "Тип лампи",
                             "27128": "Цоколь",
                             "27125": "Технологія",
                             "253287": "Колір колби",
-                            "92802": "1" // Фиксированное значение
+                            "92802": "1"
                         };
 
-                        // Словарь преобразований
                         const valueTransform = {
-                            "27126": { // Назначение
+                            "27126": {
                                 "Освещение панели управления": ["панель управління", "панель", "dashboard", "приладова панель"],
                                 "Передние противотуманные фонари": ["противотуманные", "протитуманні", "fog", "туман"],
                                 "Дневные ходовые огни": ["денні ходові", "дневные", "DRL", "денного світла"],
@@ -430,14 +427,14 @@ const categoryModules = {
                                 "Подсветка багажника": ["багажник", "trunk", "багажного відсіку"],
                                 "Фонари заднего хода": ["заднього ходу", "reverse", "реверс"]
                             },
-                            "27125": { // Вид
+                            "27125": {
                                 "Лампы накаливания": ["розжарювання", "накаливания", "incandescent"],
                                 "Галогеновые": ["галогенові", "галоген", "halogen"],
                                 "Светодиоды": ["світлодіодні", "LED", "светодиод"],
                                 "Ксеноновые": ["ксенон", "xenon"],
                                 "Биксеноновые": ["біксенон", "bixenon"]
                             },
-                            "253287": { // Цвет света
+                            "253287": {
                                 "Белый": ["білий", "white", "прозорий"],
                                 "Желтый": ["жовтий", "yellow"],
                                 "Красный": ["червоний", "red"],
@@ -450,29 +447,32 @@ const categoryModules = {
                             }
                         };
 
-                        // Преобразуем данные
                         const result = {};
                         for (const [paramId, jsonKey] of Object.entries(paramMap)) {
                             let value = jsonKey === "1" ? "1" : lampData[jsonKey];
+                            console.log(`🔧 Обрабатываем параметр ${paramId}: исходное значение "${value}"`);
                             if (value && valueTransform[paramId]) {
-                                // Преобразуем значение через словарь
                                 for (const [adminValue, keywords] of Object.entries(valueTransform[paramId])) {
                                     if (keywords.some(kw => value.toLowerCase().includes(kw))) {
                                         value = adminValue;
+                                        console.log(`✅ Преобразовано: ${paramId} = "${value}"`);
                                         break;
                                     }
                                 }
                             }
-                            if (value) result[paramId] = value;
+                            if (value) {
+                                result[paramId] = value;
+                            } else {
+                                console.log(`⚠ Значение для параметра ${paramId} не добавлено (значение: "${value}")`);
+                            }
                         }
-
+                        console.log("📦 Итоговые параметры:", result);
                         resolve(Object.keys(result).length ? result : null);
                     });
                 });
             });
         },
 
-        // Переопределяем process для работы с промисом
         process: async function() {
             console.log(`🔧 Обработка категории: "Автолампы"`);
             const params = await this.determineValues();
@@ -489,6 +489,7 @@ const categoryModules = {
                     return;
                 }
                 const [paramId, value] = paramEntries[index];
+                console.log(`➡️ Добавляем параметр: ${paramId} = "${value}"`);
                 if (!window.checkIfParameterExists(paramId, value)) {
                     window.addParameter(paramId, value, () => processParam(index + 1));
                 } else {
