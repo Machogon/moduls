@@ -33,10 +33,9 @@
          }
  
          // Особый случай: добавление обеих сторон если не найдена
-         if (paramId === "122881" && !result["122881"] && !this.skipSideIfNotFound && parameters["122881"]) {
-         if (!result["122881"] && !this.skipSideIfNotFound && this.parameters["122881"]) {
+         if (!result["122881"] && !this.skipSideIfNotFound && parameters["122881"]) {
              result["122881"] = ["Слева", "Справа"];
-             console.log(`ℹ Добавляем обе стороны установки, так как сторона не указана`);
+             console.log(`ℹ Добавляем обе стороны установки`);
          }
  
          return Object.keys(result).length ? result : null;
