@@ -32,48 +32,73 @@ const createCategoryModule = (categoryName, parameters, { stopWords = [], skipSi
             }
         }
 
-        // Особый случай: добавление обеих сторон если не найдена
+        // Особый случай: если сторона не указана, добавляем флаг для поочередного добавления
         if (!result["122881"] && !this.skipSideIfNotFound && this.parameters["122881"]) {
-            result["122881"] = ["Слева", "Справа"];
-            console.log(`ℹ Добавляем обе стороны установки, так как сторона не указана`);
+            result["122881"] = "BOTH_SIDES"; // Специальное значение для обработки
+            console.log(`ℹ Будем добавлять стороны поочередно`);
         }
 
         return Object.keys(result).length ? result : null;
     },
-    process: function() {
-        console.log(`🔧 Обработка категории: ${categoryName}`);
-        const productName = document.querySelector("input[name='name']")?.value.toLowerCase() || '';
-        const params = this.determineValues(productName);
+    
+process: function() {
+    console.log(`🔧 Обработка категории: ${this.categoryName}`);
+    const productName = document.querySelector("input[name='name']")?.value.toLowerCase() || '';
+    const params = this.determineValues(productName);
+    
+    if (!params) {
+        console.log("⚠ Параметры не найдены в названии");
+        window.goToNextProduct();
+        return;
+    }
+
+    // Проверяем, есть ли в этой категории параметр стороны (122881)
+    const hasSideParam = this.parameters.hasOwnProperty("122881");
+    
+    // Последовательное добавление параметров
+    const processParam = (index) => {
+        let paramEntries = Object.entries(params);
         
-        if (!params) {
-            console.log("⚠ Параметры не найдены в названии");
+        // Если это параметр стороны с BOTH_SIDES и он есть в категории
+        if (hasSideParam && params["122881"] === "BOTH_SIDES") {
+            const leftExists = window.checkIfParameterExists("122881", "Слева");
+            const rightExists = window.checkIfParameterExists("122881", "Справа");
+            
+            if (!leftExists) {
+                console.log("Добавляем сторону: Слева");
+                return window.addParameter("122881", "Слева", () => {
+                    setTimeout(() => processParam(index), 1500); // Повторно проверяем этот же индекс
+                });
+            }
+            else if (!rightExists) {
+                console.log("Добавляем сторону: Справа");
+                return window.addParameter("122881", "Справа", () => {
+                    setTimeout(() => processParam(index + 1), 1500); // Переходим к следующему параметру
+                });
+            }
+            else {
+                // Обе стороны уже добавлены - удаляем BOTH_SIDES из params
+                delete params["122881"];
+                paramEntries = Object.entries(params); // Обновляем список параметров
+            }
+        }
+
+        if (index >= paramEntries.length) {
             window.goToNextProduct();
             return;
         }
 
-        // Последовательное добавление параметров
-        const processParam = (index) => {
-            const paramEntries = Array.isArray(params) ? 
-                params.map(value => [Object.keys(this.parameters)[0], value]) : 
-                Object.entries(params);
-            
-            if (index >= paramEntries.length) {
-                window.goToNextProduct();
-                return;
-            }
+        const [paramId, value] = paramEntries[index];
+        if (!window.checkIfParameterExists(paramId, value)) {
+            window.addParameter(paramId, value, () => processParam(index + 1));
+        } else {
+            console.log(`✅ Параметр уже есть: ${paramId} = "${value}"`);
+            processParam(index + 1);
+        }
+    };
 
-            const [paramId, value] = paramEntries[index];
-            if (!window.checkIfParameterExists(paramId, value)) {
-                window.addParameter(paramId, value, () => processParam(index + 1));
-            } else {
-                console.log(`✅ Параметр уже есть: ${paramId} = "${value}"`);
-                processParam(index + 1);
-            }
-        };
-
-        processParam(0);
-    }
-});
+    processParam(0);
+}
 
 // ======================== ВСЕ КАТЕГОРИИ С ПОЛНЫМИ ПАРАМЕТРАМИ ========================
 const categoryModules = {
